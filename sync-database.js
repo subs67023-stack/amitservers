@@ -1,6 +1,7 @@
 const { sequelize } = require('./config/database');
 const { testConnection } = require('./config/database');
 require('dotenv').config();
+require('./models');
 
 const syncDatabase = async () => {
   try {
