@@ -6,7 +6,12 @@ exports.createCustomer = async (req, res) => {
     try {
         const { name, address, panNumber, gstNumber, email, phone } = req.body;
         const customer = await GSTCustomer.create({
-            name, address, panNumber, gstNumber, email, phone
+            name,
+            address,
+            panNumber,
+            gstNumber,
+            email: email === "" ? null : email,
+            phone
         });
         res.status(201).json({ status: 'success', data: customer });
     } catch (error) {
