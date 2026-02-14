@@ -6,11 +6,13 @@ const wholesaleJamaKharchController = require('../controllers/wholesaleJamaKharc
 // Silver routes
 router.post('/silver', authenticate, wholesaleJamaKharchController.createSilverTransaction);
 router.get('/silver', authenticate, wholesaleJamaKharchController.getSilverTransactions);
+router.get('/silver/pdf', authenticate, wholesaleJamaKharchController.downloadSilverPDF);
 router.delete('/silver/:id', authenticate, wholesaleJamaKharchController.deleteSilverTransaction);
 
 // Cash routes
 router.post('/cash', authenticate, wholesaleJamaKharchController.createCashTransaction);
 router.get('/cash', authenticate, wholesaleJamaKharchController.getCashTransactions);
+router.get('/cash/pdf', authenticate, wholesaleJamaKharchController.downloadCashPDF);
 router.delete('/cash/:id', authenticate, wholesaleJamaKharchController.deleteCashTransaction);
 
 module.exports = router;

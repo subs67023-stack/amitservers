@@ -20,6 +20,7 @@ const salaryRoutes = require('./routes/salaryRoutes');
 
 const bakiTransactionRoutes = require('./routes/bakiTransactionRoutes');
 const gstBillingRoutes = require('./routes/gstBillingRoutes');
+const productBillingRoutes = require('./routes/productBillingRoutes');
 
 
 const app = express();
@@ -28,7 +29,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors({
-  origin: 'https://sbasilvers.vercel.app',
+  origin: 'http://localhost:5173',
   credentials: true
 }));
 
@@ -55,6 +56,7 @@ app.use('/api/salaries', salaryRoutes);
 
 app.use('/api/baki-transactions', bakiTransactionRoutes);
 app.use('/api/gst-billing', gstBillingRoutes);
+app.use('/api/product-billing', productBillingRoutes);
 
 
 app.use((err, req, res, next) => {
@@ -70,6 +72,7 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await testConnection();
+    await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized');
 
     app.listen(PORT, () => {

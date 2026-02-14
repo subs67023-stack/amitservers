@@ -27,6 +27,12 @@ const GSTCustomer = require('./GSTCustomer');
 const GSTBill = require('./GSTBill');
 const GSTBillItem = require('./GSTBillItem');
 
+// Product Billing Models
+const ProductCustomer = require('./ProductCustomer');
+const ProductSale = require('./ProductSale');
+const ProductSaleItem = require('./ProductSaleItem');
+const ProductTransaction = require('./ProductTransaction');
+
 // ========================================
 // ASSOCIATIONS
 // ========================================
@@ -229,6 +235,46 @@ GSTBillItem.belongsTo(GSTBill, {
   as: 'bill'
 });
 
+// ========================================
+// PRODUCT BILLING ASSOCIATIONS
+// ========================================
+ProductCustomer.hasMany(ProductSale, {
+  foreignKey: 'customerId',
+  as: 'sales'
+});
+ProductSale.belongsTo(ProductCustomer, {
+  foreignKey: 'customerId',
+  as: 'customer'
+});
+
+ProductSale.hasMany(ProductSaleItem, {
+  foreignKey: 'saleId',
+  as: 'items',
+  onDelete: 'CASCADE'
+});
+ProductSaleItem.belongsTo(ProductSale, {
+  foreignKey: 'saleId',
+  as: 'sale'
+});
+
+ProductCustomer.hasMany(ProductTransaction, {
+  foreignKey: 'customerId',
+  as: 'transactions'
+});
+ProductTransaction.belongsTo(ProductCustomer, {
+  foreignKey: 'customerId',
+  as: 'customer'
+});
+
+ProductSale.hasMany(ProductTransaction, {
+  foreignKey: 'saleId',
+  as: 'transactions'
+});
+ProductTransaction.belongsTo(ProductSale, {
+  foreignKey: 'saleId',
+  as: 'sale'
+});
+
 module.exports = {
   sequelize,
   User,
@@ -256,6 +302,12 @@ module.exports = {
   WholesaleProduct,
   // GST Billing
   GSTCustomer,
+  GSTCustomer,
   GSTBill,
-  GSTBillItem
+  GSTBillItem,
+  // Product Billing
+  ProductCustomer,
+  ProductSale,
+  ProductSaleItem,
+  ProductTransaction
 };

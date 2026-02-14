@@ -1,5 +1,6 @@
 const RegularJamaKharchSilver = require('../models/RegularJamaKharchSilver');
 const RegularJamaKharchCash = require('../models/RegularJamaKharchCash');
+const { generateLedgerPDF } = require('../utils/pdfGenerator');
 
 // Silver Transactions
 exports.createSilverTransaction = async (req, res) => {
@@ -27,7 +28,7 @@ exports.createSilverTransaction = async (req, res) => {
 exports.getSilverTransactions = async (req, res) => {
   try {
     const { type, startDate, endDate } = req.query;
-    
+
     const where = {};
     if (type) where.type = type;
     if (startDate && endDate) {
@@ -57,7 +58,7 @@ exports.getSilverTransactions = async (req, res) => {
 exports.deleteSilverTransaction = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     await RegularJamaKharchSilver.destroy({ where: { id } });
 
     res.json({
@@ -69,6 +70,29 @@ exports.deleteSilverTransaction = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to delete transaction'
+    });
+  }
+};
+
+exports.downloadSilverPDF = async (req, res) => {
+  try {
+    const transactions = await RegularJamaKharchSilver.findAll({
+      order: [['date', 'ASC'], ['createdAt', 'ASC']]
+    });
+
+    const pdfBuffer = await generateLedgerPDF(transactions, 'Regular Silver Jama/Kharch Report', 'SILVER');
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="regular-silver-report.pdf"',
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to generate PDF'
     });
   }
 };
@@ -99,7 +123,7 @@ exports.createCashTransaction = async (req, res) => {
 exports.getCashTransactions = async (req, res) => {
   try {
     const { type, startDate, endDate } = req.query;
-    
+
     const where = {};
     if (type) where.type = type;
     if (startDate && endDate) {
@@ -129,7 +153,7 @@ exports.getCashTransactions = async (req, res) => {
 exports.deleteCashTransaction = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     await RegularJamaKharchCash.destroy({ where: { id } });
 
     res.json({
@@ -141,6 +165,29 @@ exports.deleteCashTransaction = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to delete transaction'
+    });
+  }
+};
+
+exports.downloadCashPDF = async (req, res) => {
+  try {
+    const transactions = await RegularJamaKharchCash.findAll({
+      order: [['date', 'ASC'], ['createdAt', 'ASC']]
+    });
+
+    const pdfBuffer = await generateLedgerPDF(transactions, 'Regular Cash Jama/Kharch Report', 'CASH');
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="regular-cash-report.pdf"',
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to generate PDF'
     });
   }
 };

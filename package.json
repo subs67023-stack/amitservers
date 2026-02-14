@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node seed-production.js && node server.js",
+    "start": "node server.js",
     "dev": "nodemon server.js"
   },
   "keywords": [],
@@ -19,6 +19,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.15.1",
+    "puppeteer": "^24.36.0",
     "sequelize": "^6.37.7"
   },
   "devDependencies": {
