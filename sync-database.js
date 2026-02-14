@@ -1,18 +1,17 @@
 const { sequelize } = require('./config/database');
 const { testConnection } = require('./config/database');
 require('dotenv').config();
-require('./models');
 
 const syncDatabase = async () => {
   try {
     console.log('🔄 Syncing database schema...');
-    
+
     // Test connection first
     await testConnection();
-    
+
     // Use alter: true to modify existing tables without dropping data
-    await sequelize.sync({ alter: true });
-    
+    await sequelize.sync();
+
     console.log('✅ Database schema synced successfully!');
     console.log('✅ New "images" column added to products table');
     process.exit(0);

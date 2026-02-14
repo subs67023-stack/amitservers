@@ -29,7 +29,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: [process.env.CLIENT_URL, 'https://sbasilvers.vercel.app'].filter(Boolean),
   credentials: true
 }));
 
@@ -72,7 +72,7 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await testConnection();
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log('✅ Database tables synchronized');
 
     app.listen(PORT, () => {
