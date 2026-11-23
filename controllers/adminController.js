@@ -37,7 +37,7 @@ const getDashboardStats = async (req, res) => {
       status: 'success',
       data: {
         overview: {
-          totalSilverWeight: parseFloat(totalSilverResult.totalWeight || 0).toFixed(2),
+          totalSilverWeight: Math.round(parseFloat(totalSilverResult.totalWeight || 0)),
           totalMonetaryValue: parseFloat(totalSilverResult.totalValue || 0).toFixed(2),
           totalProducts,
           totalUsers,
@@ -47,7 +47,7 @@ const getDashboardStats = async (req, res) => {
           categoryId: cat.categoryId,
           categoryName: cat.categoryName,
           productCount: parseInt(cat.productCount || 0),
-          totalSilverWeight: parseFloat(cat.totalSilverWeight || 0).toFixed(2)
+          totalSilverWeight: Math.round(parseFloat(cat.totalSilverWeight || 0))
         }))
       }
     });

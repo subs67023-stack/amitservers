@@ -78,12 +78,12 @@ exports.createBullen = async (req, res) => {
       if (saleType === 'gut') {
         // Gut Badal: Total Silver = Raw Silver * Touch / 100
         if (rawSilver && touch) {
-          totalSilver = (parseFloat(rawSilver) * parseFloat(touch)) / 100;
+          totalSilver = Math.round((parseFloat(rawSilver) * parseFloat(touch)) / 100);
         }
       } else if (saleType === 'kach') {
         // Kachi Badal: Fine = Weight * Touch / 100
         if (weight && touch) {
-          fine = (parseFloat(weight) * parseFloat(touch)) / 100;
+          fine = Math.round((parseFloat(weight) * parseFloat(touch)) / 100);
         }
       }
     } else {
@@ -93,7 +93,7 @@ exports.createBullen = async (req, res) => {
         totalAmount = parseFloat(weight) * parseFloat(bhav);
       } else if (saleType === 'kach') {
         // Kach Sale/Purchase: Fine = (Weight × Touch) / 100
-        fine = (parseFloat(weight) * parseFloat(touch)) / 100;
+        fine = Math.round((parseFloat(weight) * parseFloat(touch)) / 100);
         // Total = Fine × Bhav
         totalAmount = fine * parseFloat(bhav);
       }
@@ -107,12 +107,12 @@ exports.createBullen = async (req, res) => {
       bullenName,
       weight,
       touch: (saleType === 'kach' || transactionType === 'badal') ? touch : null,
-      fine: fine ? fine.toFixed(3) : null,
+      fine: fine !== null ? Math.round(fine) : null,
       bhav: transactionType === 'badal' ? null : bhav,
       totalAmount: totalAmount ? totalAmount.toFixed(2) : null,
       badal: transactionType === 'badal' ? badal : null,
       rawSilver: (transactionType === 'badal' && saleType === 'gut') ? rawSilver : null,
-      totalSilver: totalSilver ? totalSilver.toFixed(3) : null,
+      totalSilver: totalSilver !== null ? Math.round(totalSilver) : null,
       gutReturn: (transactionType === 'badal' && saleType === 'kach') ? gutReturn : null,
       description
     });

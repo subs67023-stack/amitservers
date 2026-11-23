@@ -238,8 +238,11 @@ exports.createRegularSale = async (req, res) => {
       includePreviousDue = false,
       notes,
       paymentMode = 'none', // 'none', 'cash', 'silver', 'multiple'
-      payments = {}
+      payments = {},
+      date
     } = req.body;
+
+    const effectiveDate = date ? new Date(date) : new Date();
 
     const customer = await RegularCustomer.findByPk(regularCustomerId, {
       transaction: t
@@ -285,7 +288,7 @@ exports.createRegularSale = async (req, res) => {
       const touch = parseFloat(item.touch || 0);
       const laborRatePerKg = parseFloat(item.laborRatePerKg || 0);
 
-      const silverWeight = ((touch + wastage) * netWeight) / 100;
+      const silverWeight = Math.round(((touch + wastage) * netWeight) / 100);
       // FIX: Labour calculation: netWeight * labour / 1000
       const laborCharges = (netWeight * laborRatePerKg) / 1000;
 
@@ -312,11 +315,12 @@ exports.createRegularSale = async (req, res) => {
       };
     });
 
-    const realPreviousBalanceSilver = parseFloat(customer.balanceSilver || 0);
+    totalSilverWeight = Math.round(totalSilverWeight);
+    const realPreviousBalanceSilver = Math.round(parseFloat(customer.balanceSilver || 0));
     const realPreviousBalanceLabor = parseFloat(customer.balanceLabor || 0);
 
     // Initial balances (Accumulate from Real Previous)
-    let balanceSilver = totalSilverWeight + realPreviousBalanceSilver;
+    let balanceSilver = Math.round(totalSilverWeight + realPreviousBalanceSilver);
     let balanceLabor = totalLaborCharges + realPreviousBalanceLabor;
 
     let paidSilver = 0;
@@ -335,7 +339,7 @@ exports.createRegularSale = async (req, res) => {
 
     // Calculate total silver paid from list
     silverPaymentsList.forEach(p => {
-      paidSilver += parseFloat(p.fine || 0);
+      paidSilver += Math.round(parseFloat(p.fine || 0));
     });
 
     // Cash for Silver (reduces silver balance)
@@ -343,7 +347,7 @@ exports.createRegularSale = async (req, res) => {
       payments.cashForSilver &&
       parseFloat(payments.cashForSilver.weight) > 0
     ) {
-      paidSilver += parseFloat(payments.cashForSilver.weight);
+      paidSilver += Math.round(parseFloat(payments.cashForSilver.weight));
     }
 
     // Labor Payment
@@ -351,7 +355,7 @@ exports.createRegularSale = async (req, res) => {
       paidLabor += parseFloat(payments.labor);
     }
 
-    balanceSilver -= paidSilver;
+    balanceSilver = Math.round(balanceSilver - paidSilver);
     balanceLabor -= paidLabor;
 
     const silverStatus = balanceSilver <= 0.005 ? 'PAID' : 'UNPAID';
@@ -368,6 +372,7 @@ exports.createRegularSale = async (req, res) => {
       {
         voucherNumber,
         regularCustomerId,
+        saleDate: effectiveDate,
         totalNetWeight,
         totalWastage,
         totalSilverWeight,
@@ -403,6 +408,7 @@ exports.createRegularSale = async (req, res) => {
         regularCustomerId,
         regularSaleId: sale.id,
         type: 'sale',
+        transactionDate: effectiveDate,
         silverWeight: totalSilverWeight,
         laborAmount: totalLaborCharges,
         cashAmount: 0,
@@ -439,6 +445,7 @@ exports.createRegularSale = async (req, res) => {
             regularCustomerId,
             regularSaleId: sale.id,
             type: 'silver_payment',
+            transactionDate: effectiveDate,
             silverWeight: -fine,
             laborAmount: 0,
             cashAmount: 0,
@@ -471,6 +478,7 @@ exports.createRegularSale = async (req, res) => {
           regularCustomerId,
           regularSaleId: sale.id,
           type: 'cash_for_silver',
+          transactionDate: effectiveDate,
           silverWeight: -weight,
           laborAmount: 0,
           cashAmount: cashAmount,
@@ -502,6 +510,7 @@ exports.createRegularSale = async (req, res) => {
           regularCustomerId,
           regularSaleId: sale.id,
           type: 'labor_payment',
+          transactionDate: effectiveDate,
           silverWeight: 0,
           laborAmount: -laborPayment,
           cashAmount: laborPayment,
@@ -721,7 +730,7 @@ exports.updateSale = async (req, res) => {
 
   try {
     const { saleId } = req.params;
-    const { items, includePreviousDue, notes } = req.body;
+    const { items, includePreviousDue, notes, date } = req.body;
 
     const sale = await RegularSale.findByPk(saleId, {
       include: [{ model: RegularCustomer, as: 'customer' }],
@@ -754,7 +763,7 @@ exports.updateSale = async (req, res) => {
       const touch = parseFloat(item.touch || 0);
       const laborRatePerKg = parseFloat(item.laborRatePerKg || 0);
 
-      const silverWeight = ((touch + wastage) * netWeight) / 100;
+      const silverWeight = Math.round(((touch + wastage) * netWeight) / 100);
       const laborCharges = (netWeight * laborRatePerKg) / 1000;
 
       totalNetWeight += netWeight;
@@ -782,11 +791,12 @@ exports.updateSale = async (req, res) => {
       };
     });
 
+    totalSilverWeight = Math.round(totalSilverWeight);
     await RegularSaleItem.bulkCreate(itemsData, { transaction: t });
 
-    const previousBalanceSilver = parseFloat(
+    const previousBalanceSilver = Math.round(parseFloat(
       sale.previousBalanceSilver || 0
-    );
+    ));
     const previousBalanceLabor = parseFloat(
       sale.previousBalanceLabor || 0
     );
@@ -795,11 +805,11 @@ exports.updateSale = async (req, res) => {
     let balanceLabor = totalLaborCharges;
 
     if (includePreviousDue) {
-      balanceSilver += previousBalanceSilver;
+      balanceSilver = Math.round(balanceSilver + previousBalanceSilver);
       balanceLabor += previousBalanceLabor;
     }
 
-    balanceSilver -= parseFloat(sale.paidSilver || 0);
+    balanceSilver = Math.round(balanceSilver - parseFloat(sale.paidSilver || 0));
     balanceLabor -= parseFloat(sale.paidLabor || 0);
 
     const silverStatus = balanceSilver <= 0 ? 'PAID' : 'UNPAID';
@@ -817,6 +827,7 @@ exports.updateSale = async (req, res) => {
 
     await sale.update(
       {
+        ...(date && { saleDate: new Date(date) }),
         totalNetWeight,
         totalWastage,
         totalSilverWeight,
@@ -831,6 +842,13 @@ exports.updateSale = async (req, res) => {
       },
       { transaction: t }
     );
+
+    if (date) {
+      await RegularTransaction.update(
+        { transactionDate: new Date(date) },
+        { where: { regularSaleId: saleId, type: 'sale' }, transaction: t }
+      );
+    }
 
     await sale.customer.update(
       {

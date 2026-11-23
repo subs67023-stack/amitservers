@@ -33,6 +33,14 @@ const ProductSale = require('./ProductSale');
 const ProductSaleItem = require('./ProductSaleItem');
 const ProductTransaction = require('./ProductTransaction');
 
+// Production Batch & Raw Material Models
+const ProductionBatch = require('./ProductionBatch');
+const ProductionBatchItem = require('./ProductionBatchItem');
+
+// Pital Kaam Models
+const PitalCustomer = require('./PitalCustomer');
+const PitalEntry = require('./PitalEntry');
+
 // ========================================
 // ASSOCIATIONS
 // ========================================
@@ -275,6 +283,28 @@ ProductTransaction.belongsTo(ProductSale, {
   as: 'sale'
 });
 
+// Production Batch Relationships
+ProductionBatch.hasMany(ProductionBatchItem, {
+  foreignKey: 'batchId',
+  as: 'items',
+  onDelete: 'CASCADE'
+});
+ProductionBatchItem.belongsTo(ProductionBatch, {
+  foreignKey: 'batchId',
+  as: 'batch'
+});
+
+// Pital Kaam Relationships
+PitalCustomer.hasMany(PitalEntry, {
+  foreignKey: 'customerId',
+  as: 'entries',
+  onDelete: 'SET NULL'
+});
+PitalEntry.belongsTo(PitalCustomer, {
+  foreignKey: 'customerId',
+  as: 'customer'
+});
+
 module.exports = {
   sequelize,
   User,
@@ -309,5 +339,11 @@ module.exports = {
   ProductCustomer,
   ProductSale,
   ProductSaleItem,
-  ProductTransaction
+  ProductTransaction,
+  // Production Batches
+  ProductionBatch,
+  ProductionBatchItem,
+  // Pital Kaam Models
+  PitalCustomer,
+  PitalEntry
 };

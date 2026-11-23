@@ -138,8 +138,11 @@ exports.createSale = async (req, res) => {
             cgstPercent = 1.5,
             sgstPercent = 1.5,
             notes,
-            paymentDetails // Get full payment details including silver payments
+            paymentDetails, // Get full payment details including silver payments
+            date
         } = req.body;
+
+        const effectiveDate = date ? new Date(date) : new Date();
 
         const customer = await ProductCustomer.findByPk(customerId);
         if (!customer) {
@@ -181,7 +184,7 @@ exports.createSale = async (req, res) => {
             const touch = parseFloat(item.touch || 0);
             const laborRatePerKg = parseFloat(item.laborRatePerKg || 0);
 
-            const silverWeight = ((touch + wastage) * netWeight) / 100;
+            const silverWeight = Math.round(((touch + wastage) * netWeight) / 100);
             const laborCharges = (grossWeight / 1000) * laborRatePerKg;
             const itemAmount = (silverWeight * parseFloat(silverRate)) + laborCharges;
 
@@ -204,6 +207,8 @@ exports.createSale = async (req, res) => {
             };
         });
 
+        totalSilverWeight = Math.round(totalSilverWeight);
+
         const cgst = gstApplicable ? (subtotal * cgstPercent) / 100 : 0;
         const sgst = gstApplicable ? (subtotal * sgstPercent) / 100 : 0;
         const totalAmount = subtotal + cgst + sgst;
@@ -213,8 +218,8 @@ exports.createSale = async (req, res) => {
         const laborBalanceAfter = laborBalanceBefore + totalAmount;
 
         // Silver Ledger logic: If we track silver weight as credit too
-        const silverBalanceBefore = parseFloat(customer.balanceSilver || 0);
-        const silverBalanceAfter = silverBalanceBefore + totalSilverWeight;
+        const silverBalanceBefore = Math.round(parseFloat(customer.balanceSilver || 0));
+        const silverBalanceAfter = Math.round(silverBalanceBefore + totalSilverWeight);
 
         customer.balanceLabor = laborBalanceAfter;
         customer.balanceSilver = silverBalanceAfter;
@@ -224,6 +229,7 @@ exports.createSale = async (req, res) => {
             voucherNumber,
             customerId,
             billingType,
+            saleDate: effectiveDate,
             silverRate,
             totalNetWeight,
             totalWastage,
@@ -268,6 +274,7 @@ exports.createSale = async (req, res) => {
             customerId,
             saleId: sale.id,
             type: 'sale',
+            transactionDate: effectiveDate,
             amount: totalAmount, // Positive adds to balance
             silverWeight: totalSilverWeight,
             balanceBefore: laborBalanceBefore,
@@ -290,16 +297,17 @@ exports.createSale = async (req, res) => {
 
                 let totalPaidSilver = 0;
                 for (const p of paymentDetails.silverPayments) {
-                    totalPaidSilver += parseFloat(p.fine || 0);
+                    totalPaidSilver += Math.round(parseFloat(p.fine || 0));
                 }
 
                 if (totalPaidSilver > 0) {
-                    const newBalSilver = currentBalSilver - totalPaidSilver;
+                    const newBalSilver = Math.round(currentBalSilver - totalPaidSilver);
 
                     await ProductTransaction.create({
                         customerId,
                         saleId: sale.id,
                         type: 'payment', // Silver Payment
+                        transactionDate: effectiveDate,
                         silverWeight: -totalPaidSilver,
                         amount: 0,
                         balanceSilverBefore: currentBalSilver,
@@ -328,6 +336,7 @@ exports.createSale = async (req, res) => {
                     customerId,
                     saleId: sale.id,
                     type: 'payment',
+                    transactionDate: effectiveDate,
                     amount: -cashPaid,
                     silverWeight: 0,
                     balanceLaborBefore: currentBalLabor,

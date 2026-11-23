@@ -244,6 +244,7 @@ exports.addWholesaleProduct = async (req, res) => {
       perPieceWeight,
       netWeight,
       touch,
+      items, // Multi-item array: [{ name, pieces, grossWeight, perPieceWeight, netWeight, touch }]
       producerId, // Changed from customerId
       newProducerName, // Changed from newCustomerName
       newProducerPhone // Changed from newCustomerPhone
@@ -259,6 +260,27 @@ exports.addWholesaleProduct = async (req, res) => {
       finalProducerId = newProd.id;
     }
 
+    // Handle multiple items batch insertion
+    if (items && Array.isArray(items) && items.length > 0) {
+      const createdProducts = [];
+      for (const item of items) {
+        if (!item.name || !item.pieces) continue; // skip empty rows
+        const product = await WholesaleProduct.create({
+          name: item.name,
+          pieces: parseInt(item.pieces || 0),
+          grossWeight: parseFloat(item.grossWeight || 0),
+          perPieceWeight: parseFloat(item.perPieceWeight || 0),
+          netWeight: parseFloat(item.netWeight || 0),
+          touch: parseFloat(item.touch || 0),
+          producerId: finalProducerId
+        }, { transaction: t });
+        createdProducts.push(product);
+      }
+      await t.commit();
+      return res.json({ success: true, message: `${createdProducts.length} Product(s) added successfully`, data: createdProducts });
+    }
+
+    // Single product fallback
     const product = await WholesaleProduct.create({
       name,
       pieces: parseInt(pieces || 0),
@@ -337,8 +359,11 @@ exports.createSale = async (req, res) => {
       gstApplicable = false,
       cgstPercent = 1.5,
       sgstPercent = 1.5,
-      notes
+      notes,
+      date
     } = req.body;
+
+    const effectiveDate = date ? new Date(date) : new Date();
 
     const customer = await Customer.findByPk(customerId);
     if (!customer) {
@@ -380,8 +405,8 @@ exports.createSale = async (req, res) => {
       const touch = parseFloat(item.touch || 0);
       const laborRatePerKg = parseFloat(item.laborRatePerKg || 0);
 
-      // NEW FORMULA: Silver = (touch + wastage) × netWeight / 100
-      const silverWeight = ((touch + wastage) * netWeight) / 100;
+      // NEW FORMULA: Silver = (touch + wastage) × netWeight / 100 (Rounded off to nearest whole gram)
+      const silverWeight = Math.round(((touch + wastage) * netWeight) / 100);
 
       // NEW FORMULA: Labor = grossWeight × laborRatePerKg / 1000
       const laborCharges = (grossWeight / 1000) * laborRatePerKg;
@@ -408,6 +433,8 @@ exports.createSale = async (req, res) => {
       };
     });
 
+    totalSilverWeight = Math.round(totalSilverWeight);
+
     const cgst = gstApplicable ? (subtotal * cgstPercent) / 100 : 0;
     const sgst = gstApplicable ? (subtotal * sgstPercent) / 100 : 0;
     const totalAmount = subtotal + cgst + sgst;
@@ -415,21 +442,20 @@ exports.createSale = async (req, res) => {
     // 2. Calculate Credits (Payments)
     const paymentDetails = req.body.paymentDetails || {};
     const cashPaid = parseFloat(paymentDetails.cashPayment || paidAmount || 0);
-    const silverPaid = parseFloat(paidSilver || 0);
+    const silverPaid = Math.round(parseFloat(paidSilver || 0));
     const c4s = paymentDetails.cashForSilver || {};
-    const c4sWeight = parseFloat(c4s.weight || 0);
+    const c4sWeight = Math.round(parseFloat(c4s.weight || 0));
     const c4sRate = parseFloat(c4s.rate || 0);
     const c4sValue = c4sWeight * c4sRate;
 
-    // 3. Update Split Balances
     // 3. Update Split Balances
     const laborBalanceBefore = parseFloat(customer.balanceLabor || 0);
     // FIX: c4sValue NOT deducted from Labor Balance
     const laborBalanceAfter = laborBalanceBefore + totalAmount - cashPaid;
 
-    const silverBalanceBefore = parseFloat(customer.balanceSilver || 0);
+    const silverBalanceBefore = Math.round(parseFloat(customer.balanceSilver || 0));
     // FIX: c4sWeight deducted from Silver Balance
-    const silverBalanceAfter = silverBalanceBefore + totalSilverWeight - silverPaid - c4sWeight;
+    const silverBalanceAfter = Math.round(silverBalanceBefore + totalSilverWeight - silverPaid - c4sWeight);
 
     customer.balanceLabor = laborBalanceAfter;
     customer.balanceSilver = silverBalanceAfter;
@@ -453,6 +479,7 @@ exports.createSale = async (req, res) => {
       voucherNumber,
       customerId,
       billingType,
+      saleDate: effectiveDate,
       silverRate,
       totalNetWeight,
       totalWastage,
@@ -534,6 +561,7 @@ exports.createSale = async (req, res) => {
       customerId,
       saleId: sale.id,
       type: 'sale',
+      transactionDate: effectiveDate,
       amount: totalAmount, // Debit Labor
       silverWeight: totalSilverWeight, // Debit Silver
 
@@ -558,6 +586,7 @@ exports.createSale = async (req, res) => {
         customerId,
         saleId: sale.id,
         type: 'payment',
+        transactionDate: effectiveDate,
         amount: -cashPaid,
         paymentMode: 'cash',
 
@@ -579,6 +608,7 @@ exports.createSale = async (req, res) => {
         customerId,
         saleId: sale.id,
         type: 'silver_return', // Treat as Silver Return
+        transactionDate: effectiveDate,
         amount: 0,
         silverWeight: -silverPaid, // Credit Silver
         paymentMode: null,
@@ -1249,13 +1279,14 @@ const addSilverPayment = async (req, res) => {
     const silverValue = parseFloat(silverWeight) * parseFloat(silverRate);
 
     // Update paid silver and paid amount
-    const newPaidSilver = parseFloat(sale.paidSilver || 0) + parseFloat(silverWeight);
+    const roundedSilverWeight = Math.round(parseFloat(silverWeight));
+    const newPaidSilver = Math.round(parseFloat(sale.paidSilver || 0) + roundedSilverWeight);
     const newPaidAmount = parseFloat(sale.paidAmount) + silverValue;
     const newBalanceAmount = parseFloat(sale.totalAmount) - newPaidAmount;
 
     // Calculate new silver balance (sale)
-    const currentSilverBal = parseFloat(sale.balanceSilver || 0);
-    const newSilverBal = currentSilverBal - parseFloat(silverWeight);
+    const currentSilverBal = Math.round(parseFloat(sale.balanceSilver || 0));
+    const newSilverBal = Math.round(currentSilverBal - roundedSilverWeight);
 
     // Determine payment status
     let paymentStatus = 'pending';
@@ -1444,12 +1475,12 @@ exports.addCashForSilver = async (req, res) => {
 
     const customer = await Customer.findByPk(sale.customerId, { transaction: t });
     const rate = parseFloat(silverRate);
-    const weight = parseFloat(silverWeight);
+    const weight = Math.round(parseFloat(silverWeight));
     const cashAmount = rate * weight;
 
     // Calculate new balances
-    const previousBalanceSilver = parseFloat(sale.balanceSilver || 0);
-    const newBalanceSilver = previousBalanceSilver - weight;
+    const previousBalanceSilver = Math.round(parseFloat(sale.balanceSilver || 0));
+    const newBalanceSilver = Math.round(previousBalanceSilver - weight);
 
     // Update Sale
     sale.balanceSilver = newBalanceSilver;

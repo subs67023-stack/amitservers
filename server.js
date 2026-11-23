@@ -21,6 +21,8 @@ const salaryRoutes = require('./routes/salaryRoutes');
 const bakiTransactionRoutes = require('./routes/bakiTransactionRoutes');
 const gstBillingRoutes = require('./routes/gstBillingRoutes');
 const productBillingRoutes = require('./routes/productBillingRoutes');
+const productionBatchRoutes = require('./routes/productionBatchRoutes');
+const pitalKaamRoutes = require('./routes/pitalKaamRoutes');
 
 
 const app = express();
@@ -57,6 +59,8 @@ app.use('/api/salaries', salaryRoutes);
 app.use('/api/baki-transactions', bakiTransactionRoutes);
 app.use('/api/gst-billing', gstBillingRoutes);
 app.use('/api/product-billing', productBillingRoutes);
+app.use('/api/production-batches', productionBatchRoutes);
+app.use('/api/pital-kaam', pitalKaamRoutes);
 
 
 app.use((err, req, res, next) => {
@@ -72,6 +76,29 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await testConnection();
+
+    // Auto-migrate pital_customers schema if table exists without customerType
+    try {
+      const [colRows] = await sequelize.query("SHOW COLUMNS FROM `pital_customers` LIKE 'customerType'");
+      if (colRows.length === 0) {
+        console.log('🔄 Adding customerType column to pital_customers table...');
+        try {
+          const [indexRows] = await sequelize.query("SHOW INDEX FROM `pital_customers` WHERE Column_name = 'name' AND Non_unique = 0");
+          for (const row of indexRows) {
+            if (row.Key_name !== 'PRIMARY' && row.Key_name !== 'pital_customers_name_customer_type') {
+              try {
+                await sequelize.query(`ALTER TABLE \`pital_customers\` DROP INDEX \`${row.Key_name}\``);
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+        await sequelize.query("ALTER TABLE `pital_customers` ADD COLUMN `customerType` ENUM('kharedi', 'veekhari') NOT NULL DEFAULT 'kharedi' AFTER `id`");
+        console.log('✅ Added customerType column to pital_customers');
+      }
+    } catch (_) {
+      // Table doesn't exist yet, sync will create it with all columns
+    }
+
     await sequelize.sync();
     console.log('✅ Database tables synchronized');
 
