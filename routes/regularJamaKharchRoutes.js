@@ -6,12 +6,14 @@ const regularJamaKharchController = require('../controllers/regularJamaKharchCon
 // Silver routes
 router.post('/silver', authenticate, regularJamaKharchController.createSilverTransaction);
 router.get('/silver', authenticate, regularJamaKharchController.getSilverTransactions);
+router.get('/silver/analysis', authenticate, regularJamaKharchController.getSilverAnalysis);
 router.get('/silver/pdf', authenticate, regularJamaKharchController.downloadSilverPDF);
 router.delete('/silver/:id', authenticate, regularJamaKharchController.deleteSilverTransaction);
 
 // Cash routes
 router.post('/cash', authenticate, regularJamaKharchController.createCashTransaction);
 router.get('/cash', authenticate, regularJamaKharchController.getCashTransactions);
+router.get('/cash/analysis', authenticate, regularJamaKharchController.getCashAnalysis);
 router.get('/cash/pdf', authenticate, regularJamaKharchController.downloadCashPDF);
 router.delete('/cash/:id', authenticate, regularJamaKharchController.deleteCashTransaction);
 

@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const RegularJamaKharchSilver = require('../models/RegularJamaKharchSilver');
 const RegularJamaKharchCash = require('../models/RegularJamaKharchCash');
 const { generateLedgerPDF } = require('../utils/pdfGenerator');
@@ -30,16 +31,20 @@ exports.getSilverTransactions = async (req, res) => {
     const { type, startDate, endDate } = req.query;
 
     const where = {};
-    if (type) where.type = type;
+    if (type && type !== 'ALL') where.type = type;
     if (startDate && endDate) {
       where.date = {
         [Op.between]: [startDate, endDate]
       };
+    } else if (startDate) {
+      where.date = { [Op.gte]: startDate };
+    } else if (endDate) {
+      where.date = { [Op.lte]: endDate };
     }
 
     const transactions = await RegularJamaKharchSilver.findAll({
       where,
-      order: [['date', 'DESC'], ['createdAt', 'DESC']]
+      order: [['date', 'DESC'], ['id', 'DESC']]
     });
 
     res.json({
@@ -51,6 +56,148 @@ exports.getSilverTransactions = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch transactions'
+    });
+  }
+};
+
+exports.getSilverAnalysis = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const where = {};
+    if (startDate && endDate) {
+      where.date = { [Op.between]: [startDate, endDate] };
+    } else if (startDate) {
+      where.date = { [Op.gte]: startDate };
+    } else if (endDate) {
+      where.date = { [Op.lte]: endDate };
+    }
+
+    const transactions = await RegularJamaKharchSilver.findAll({
+      where,
+      order: [['date', 'DESC'], ['id', 'DESC']]
+    });
+
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    let totalJama = 0;
+    let totalKharcha = 0;
+    let fineJama = 0;
+    let rawJama = 0;
+    let fineKharcha = 0;
+    let rawKharcha = 0;
+    let todayJama = 0;
+    let todayKharcha = 0;
+
+    const monthlyMap = {};
+    const partyMap = {};
+
+    transactions.forEach(t => {
+      const weight = parseFloat(t.silverWeight) || 0;
+      const isJama = t.type === 'JAMA';
+      const isFine = t.silverType === 'fine';
+      const tDate = t.date ? String(t.date).split('T')[0] : '';
+
+      if (isJama) {
+        totalJama += weight;
+        if (isFine) fineJama += weight;
+        else rawJama += weight;
+      } else {
+        totalKharcha += weight;
+        if (isFine) fineKharcha += weight;
+        else rawKharcha += weight;
+      }
+
+      if (tDate === today) {
+        if (isJama) todayJama += weight;
+        else todayKharcha += weight;
+      }
+
+      // Monthly breakdown
+      const monthKey = tDate ? tDate.substring(0, 7) : 'Unknown';
+      if (!monthlyMap[monthKey]) {
+        monthlyMap[monthKey] = {
+          month: monthKey,
+          jama: 0,
+          kharcha: 0,
+          fineJama: 0,
+          rawJama: 0,
+          fineKharcha: 0,
+          rawKharcha: 0,
+          count: 0
+        };
+      }
+      if (isJama) {
+        monthlyMap[monthKey].jama += weight;
+        if (isFine) monthlyMap[monthKey].fineJama += weight;
+        else monthlyMap[monthKey].rawJama += weight;
+      } else {
+        monthlyMap[monthKey].kharcha += weight;
+        if (isFine) monthlyMap[monthKey].fineKharcha += weight;
+        else monthlyMap[monthKey].rawKharcha += weight;
+      }
+      monthlyMap[monthKey].count += 1;
+
+      // Party breakdown
+      const party = (t.name || 'Unknown').trim();
+      if (!partyMap[party]) {
+        partyMap[party] = {
+          name: party,
+          jama: 0,
+          kharcha: 0,
+          fineSilver: 0,
+          rawSilver: 0,
+          count: 0
+        };
+      }
+      if (isJama) {
+        partyMap[party].jama += weight;
+      } else {
+        partyMap[party].kharcha += weight;
+      }
+      if (isFine) partyMap[party].fineSilver += weight;
+      else partyMap[party].rawSilver += weight;
+      partyMap[party].count += 1;
+    });
+
+    const monthlyBreakdown = Object.values(monthlyMap).map(m => ({
+      ...m,
+      jama: Math.round(m.jama),
+      kharcha: Math.round(m.kharcha),
+      balance: Math.round(m.jama - m.kharcha)
+    })).sort((a, b) => b.month.localeCompare(a.month));
+
+    const partyBreakdown = Object.values(partyMap).map(p => ({
+      ...p,
+      jama: Math.round(p.jama),
+      kharcha: Math.round(p.kharcha),
+      balance: Math.round(p.jama - p.kharcha)
+    })).sort((a, b) => (b.jama + b.kharcha) - (a.jama + a.kharcha));
+
+    res.json({
+      status: 'success',
+      data: {
+        totalJama: Math.round(totalJama),
+        totalKharcha: Math.round(totalKharcha),
+        netBalance: Math.round(totalJama - totalKharcha),
+        fineJama: Math.round(fineJama),
+        rawJama: Math.round(rawJama),
+        fineKharcha: Math.round(fineKharcha),
+        rawKharcha: Math.round(rawKharcha),
+        todayJama: Math.round(todayJama),
+        todayKharcha: Math.round(todayKharcha),
+        todayNet: Math.round(todayJama - todayKharcha),
+        totalTransactions: transactions.length,
+        monthlyBreakdown,
+        partyBreakdown
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching silver analysis:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch silver analysis',
+      error: error.message
     });
   }
 };
@@ -125,16 +272,20 @@ exports.getCashTransactions = async (req, res) => {
     const { type, startDate, endDate } = req.query;
 
     const where = {};
-    if (type) where.type = type;
+    if (type && type !== 'ALL') where.type = type;
     if (startDate && endDate) {
       where.date = {
         [Op.between]: [startDate, endDate]
       };
+    } else if (startDate) {
+      where.date = { [Op.gte]: startDate };
+    } else if (endDate) {
+      where.date = { [Op.lte]: endDate };
     }
 
     const transactions = await RegularJamaKharchCash.findAll({
       where,
-      order: [['date', 'DESC'], ['createdAt', 'DESC']]
+      order: [['date', 'DESC'], ['id', 'DESC']]
     });
 
     res.json({
@@ -146,6 +297,117 @@ exports.getCashTransactions = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch transactions'
+    });
+  }
+};
+
+exports.getCashAnalysis = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const where = {};
+    if (startDate && endDate) {
+      where.date = { [Op.between]: [startDate, endDate] };
+    } else if (startDate) {
+      where.date = { [Op.gte]: startDate };
+    } else if (endDate) {
+      where.date = { [Op.lte]: endDate };
+    }
+
+    const transactions = await RegularJamaKharchCash.findAll({
+      where,
+      order: [['date', 'DESC'], ['id', 'DESC']]
+    });
+
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    let totalJama = 0;
+    let totalKharcha = 0;
+    let todayJama = 0;
+    let todayKharcha = 0;
+
+    const monthlyMap = {};
+    const partyMap = {};
+
+    transactions.forEach(t => {
+      const amt = parseFloat(t.amount) || 0;
+      const isJama = t.type === 'JAMA';
+      const tDate = t.date ? String(t.date).split('T')[0] : '';
+
+      if (isJama) {
+        totalJama += amt;
+      } else {
+        totalKharcha += amt;
+      }
+
+      if (tDate === today) {
+        if (isJama) todayJama += amt;
+        else todayKharcha += amt;
+      }
+
+      // Monthly breakdown
+      const monthKey = tDate ? tDate.substring(0, 7) : 'Unknown';
+      if (!monthlyMap[monthKey]) {
+        monthlyMap[monthKey] = {
+          month: monthKey,
+          jama: 0,
+          kharcha: 0,
+          count: 0
+        };
+      }
+      if (isJama) monthlyMap[monthKey].jama += amt;
+      else monthlyMap[monthKey].kharcha += amt;
+      monthlyMap[monthKey].count += 1;
+
+      // Party breakdown
+      const party = (t.name || 'Unknown').trim();
+      if (!partyMap[party]) {
+        partyMap[party] = {
+          name: party,
+          jama: 0,
+          kharcha: 0,
+          count: 0
+        };
+      }
+      if (isJama) partyMap[party].jama += amt;
+      else partyMap[party].kharcha += amt;
+      partyMap[party].count += 1;
+    });
+
+    const monthlyBreakdown = Object.values(monthlyMap).map(m => ({
+      ...m,
+      jama: Math.round(m.jama * 100) / 100,
+      kharcha: Math.round(m.kharcha * 100) / 100,
+      balance: Math.round((m.jama - m.kharcha) * 100) / 100
+    })).sort((a, b) => b.month.localeCompare(a.month));
+
+    const partyBreakdown = Object.values(partyMap).map(p => ({
+      ...p,
+      jama: Math.round(p.jama * 100) / 100,
+      kharcha: Math.round(p.kharcha * 100) / 100,
+      balance: Math.round((p.jama - p.kharcha) * 100) / 100
+    })).sort((a, b) => (b.jama + b.kharcha) - (a.jama + a.kharcha));
+
+    res.json({
+      status: 'success',
+      data: {
+        totalJama: Math.round(totalJama * 100) / 100,
+        totalKharcha: Math.round(totalKharcha * 100) / 100,
+        netBalance: Math.round((totalJama - totalKharcha) * 100) / 100,
+        todayJama: Math.round(todayJama * 100) / 100,
+        todayKharcha: Math.round(todayKharcha * 100) / 100,
+        todayNet: Math.round((todayJama - todayKharcha) * 100) / 100,
+        totalTransactions: transactions.length,
+        monthlyBreakdown,
+        partyBreakdown
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching cash analysis:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch cash analysis',
+      error: error.message
     });
   }
 };

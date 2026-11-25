@@ -1,5 +1,22 @@
 const puppeteer = require('puppeteer');
 
+const formatDateDDMMYYYY = (dateVal) => {
+  if (!dateVal) return '-';
+  if (typeof dateVal === 'string') {
+    const isoMatch = dateVal.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (isoMatch) {
+      const [, y, m, d] = isoMatch;
+      return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+    }
+  }
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return String(dateVal);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 /**
  * Generates a PDF ledger with running balance.
  * 
@@ -35,7 +52,7 @@ const generateLedgerPDF = async (transactions, title, type) => {
     }
 
     return {
-      date: new Date(t.date).toLocaleDateString('en-IN'),
+      date: formatDateDDMMYYYY(t.date),
       name: t.name,
       description: t.description || '-',
       type: t.type,
@@ -56,10 +73,10 @@ const generateLedgerPDF = async (transactions, title, type) => {
     <html>
     <head>
       <style>
-        body { font-family: Arial, sans-serif; font-size: 10px; }
-        h2 { text-align: center; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+        body { font-family: Arial, sans-serif; font-size: 9px; padding: 10px 15px; margin: 0; }
+        h2 { text-align: center; margin: 0 0 8px 0; font-size: 13px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; }
         th { background-color: #f2f2f2; }
         .text-right { text-align: right; }
         .bold { font-weight: bold; }
