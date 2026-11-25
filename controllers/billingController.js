@@ -242,9 +242,11 @@ exports.addWholesaleProduct = async (req, res) => {
       pieces,
       grossWeight,
       perPieceWeight,
+      stoneWeight,
       netWeight,
       touch,
-      items, // Multi-item array: [{ name, pieces, grossWeight, perPieceWeight, netWeight, touch }]
+      stamp,
+      items, // Multi-item array: [{ name, stamp, pieces, grossWeight, stoneWeight, perPieceWeight, netWeight, touch }]
       producerId, // Changed from customerId
       newProducerName, // Changed from newCustomerName
       newProducerPhone // Changed from newCustomerPhone
@@ -265,13 +267,22 @@ exports.addWholesaleProduct = async (req, res) => {
       const createdProducts = [];
       for (const item of items) {
         if (!item.name || !item.pieces) continue; // skip empty rows
+        const pcs = parseInt(item.pieces || 0);
+        const gross = parseFloat(item.grossWeight || 0);
+        const stone = parseFloat(item.stoneWeight !== undefined && item.stoneWeight !== '' ? item.stoneWeight : (item.perPieceWeight || 0));
+        const net = parseFloat(item.netWeight !== undefined && item.netWeight !== '' ? item.netWeight : Math.max(0, gross - stone));
+        const ppWt = pcs > 0 ? parseFloat((stone / pcs).toFixed(3)) : 0;
+        const stampVal = item.stamp && item.stamp.trim() ? item.stamp.trim() : '-';
+
         const product = await WholesaleProduct.create({
           name: item.name,
-          pieces: parseInt(item.pieces || 0),
-          grossWeight: parseFloat(item.grossWeight || 0),
-          perPieceWeight: parseFloat(item.perPieceWeight || 0),
-          netWeight: parseFloat(item.netWeight || 0),
+          pieces: pcs,
+          grossWeight: gross,
+          stoneWeight: stone,
+          perPieceWeight: ppWt,
+          netWeight: net,
           touch: parseFloat(item.touch || 0),
+          stamp: stampVal,
           producerId: finalProducerId
         }, { transaction: t });
         createdProducts.push(product);
@@ -281,13 +292,22 @@ exports.addWholesaleProduct = async (req, res) => {
     }
 
     // Single product fallback
+    const pcs = parseInt(pieces || 0);
+    const gross = parseFloat(grossWeight || 0);
+    const stone = parseFloat(stoneWeight !== undefined && stoneWeight !== '' ? stoneWeight : (perPieceWeight || 0));
+    const net = parseFloat(netWeight !== undefined && netWeight !== '' ? netWeight : Math.max(0, gross - stone));
+    const ppWt = pcs > 0 ? parseFloat((stone / pcs).toFixed(3)) : 0;
+    const stampVal = stamp && stamp.trim() ? stamp.trim() : '-';
+
     const product = await WholesaleProduct.create({
       name,
-      pieces: parseInt(pieces || 0),
-      grossWeight: parseFloat(grossWeight || 0),
-      perPieceWeight: parseFloat(perPieceWeight || 0),
-      netWeight: parseFloat(netWeight || 0),
+      pieces: pcs,
+      grossWeight: gross,
+      stoneWeight: stone,
+      perPieceWeight: ppWt,
+      netWeight: net,
       touch: parseFloat(touch || 0),
+      stamp: stampVal,
       producerId: finalProducerId
     }, { transaction: t });
 
@@ -309,17 +329,25 @@ exports.addWholesaleProduct = async (req, res) => {
 exports.updateWholesaleProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, pieces, grossWeight, perPieceWeight, netWeight, touch, producerId } = req.body;
+    const { name, pieces, grossWeight, perPieceWeight, stoneWeight, netWeight, touch, stamp, producerId } = req.body;
     const product = await WholesaleProduct.findByPk(id);
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
+    const pcs = pieces !== undefined ? parseInt(pieces) : product.pieces;
+    const gross = grossWeight !== undefined ? parseFloat(grossWeight) : product.grossWeight;
+    const stone = stoneWeight !== undefined ? parseFloat(stoneWeight) : (product.stoneWeight || product.perPieceWeight || 0);
+    const net = netWeight !== undefined ? parseFloat(netWeight) : Math.max(0, gross - stone);
+    const ppWt = pcs > 0 ? parseFloat((stone / pcs).toFixed(3)) : 0;
+
     await product.update({
       name: name || product.name,
-      pieces: pieces !== undefined ? parseInt(pieces) : product.pieces,
-      grossWeight: grossWeight !== undefined ? parseFloat(grossWeight) : product.grossWeight,
-      perPieceWeight: perPieceWeight !== undefined ? parseFloat(perPieceWeight) : product.perPieceWeight,
-      netWeight: netWeight !== undefined ? parseFloat(netWeight) : product.netWeight,
+      pieces: pcs,
+      grossWeight: gross,
+      stoneWeight: stone,
+      perPieceWeight: ppWt,
+      netWeight: net,
       touch: touch !== undefined ? parseFloat(touch) : product.touch,
+      stamp: stamp !== undefined ? (stamp.trim() || '-') : product.stamp,
       producerId: producerId || product.producerId
     });
 
@@ -521,15 +549,17 @@ exports.createSale = async (req, res) => {
           const soldPieces = parseInt(item.pieces || 0);
           const soldGross = parseFloat(item.grossWeight || 0);
           const soldNet = parseFloat(item.netWeight || 0);
-          // soldStoneWeight logic is handled in soldNet subtraction effectively if net = gross - stone
+          const soldStone = parseFloat(item.stoneWeight || 0);
 
           const currentPieces = parseInt(product.pieces || 0);
           const currentGross = parseFloat(product.grossWeight || 0);
           const currentNet = parseFloat(product.netWeight || 0);
+          const currentStone = parseFloat(product.stoneWeight || 0);
 
           await product.update({
             pieces: Math.max(0, currentPieces - soldPieces),
             grossWeight: Math.max(0, currentGross - soldGross),
+            stoneWeight: Math.max(0, currentStone - soldStone),
             netWeight: Math.max(0, currentNet - soldNet)
           }, { transaction: t });
         }
@@ -549,7 +579,8 @@ exports.createSale = async (req, res) => {
       silverWeight: item.silverWeight,
       laborRatePerKg: item.laborRatePerKg,
       laborCharges: item.laborCharges,
-      itemAmount: item.itemAmount
+      itemAmount: item.itemAmount,
+      stamp: item.stamp || '-'
     }));
 
     await SaleItem.bulkCreate(saleItems, { transaction: t });

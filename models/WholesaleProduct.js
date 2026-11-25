@@ -31,7 +31,12 @@ const WholesaleProduct = sequelize.define('WholesaleProduct', {
         allowNull: false,
         defaultValue: 0
     },
-    perPieceWeight: { // Deduction weight per piece
+    stoneWeight: { // Total stone weight (deduction taken once)
+        type: DataTypes.DECIMAL(10, 3),
+        allowNull: false,
+        defaultValue: 0
+    },
+    perPieceWeight: { // Deduction weight per piece (stoneWeight / pieces)
         type: DataTypes.DECIMAL(10, 3),
         allowNull: false,
         defaultValue: 0
@@ -45,6 +50,11 @@ const WholesaleProduct = sequelize.define('WholesaleProduct', {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: false,
         defaultValue: 0
+    },
+    stamp: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        defaultValue: '-'
     }
 }, {
     tableName: 'wholesale_products',

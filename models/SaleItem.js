@@ -28,6 +28,11 @@ const SaleItem = sequelize.define('SaleItem', {
     allowNull: false,
     comment: 'Item description/label'
   },
+  stamp: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    defaultValue: '-'
+  },
   pieces: {
     type: DataTypes.INTEGER,
     allowNull: false,
