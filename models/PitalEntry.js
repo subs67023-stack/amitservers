@@ -74,6 +74,12 @@ const PitalEntry = sequelize.define('PitalEntry', {
   notes: {
     type: DataTypes.TEXT,
     allowNull: true
+  },
+  items: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: null,
+    comment: 'List of products for this entry [{ productName, kg, ratePerKg, total }]'
   }
 }, {
   tableName: 'pital_entries',

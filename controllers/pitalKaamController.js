@@ -272,23 +272,55 @@ exports.getVeekhari = async (req, res) => {
 exports.createVeekhari = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
-    const { date, name, kg, ratePerKg, takenRatePerKg, notes } = req.body;
+    const { date, name, kg, ratePerKg, takenRatePerKg, notes, items } = req.body;
 
     if (!name || !name.trim()) {
       await transaction.rollback();
       return res.status(400).json({ success: false, message: 'Customer name is required' });
     }
 
-    const parsedKg = parseFloat(kg) || 0;
-    const parsedRate = parseFloat(ratePerKg) || 0;
-    const parsedTakenRate = takenRatePerKg !== undefined && takenRatePerKg !== '' ? parseFloat(takenRatePerKg) : null;
+    let parsedKg = 0;
+    let total = 0;
+    let parsedRate = 0;
+    let cleanedItems = null;
 
-    if (parsedKg <= 0 || parsedRate <= 0) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: 'Valid kg and rate/kg are required' });
+    if (Array.isArray(items) && items.length > 0) {
+      cleanedItems = items.map(it => {
+        const itKg = parseFloat(it.kg) || 0;
+        const itRate = parseFloat(it.ratePerKg) || 0;
+        const itTotal = Number((itKg * itRate).toFixed(2));
+        return {
+          productName: (it.productName || 'Pital Material').trim(),
+          kg: Number(itKg.toFixed(3)),
+          ratePerKg: Number(itRate.toFixed(2)),
+          total: itTotal
+        };
+      });
+
+      parsedKg = Number(cleanedItems.reduce((acc, it) => acc + it.kg, 0).toFixed(3));
+      total = Number(cleanedItems.reduce((acc, it) => acc + it.total, 0).toFixed(2));
+      parsedRate = parsedKg > 0 ? Number((total / parsedKg).toFixed(2)) : 0;
+    } else {
+      parsedKg = parseFloat(kg) || 0;
+      parsedRate = parseFloat(ratePerKg) || 0;
+      total = Number((parsedKg * parsedRate).toFixed(2));
+      cleanedItems = [{
+        productName: 'Pital Material',
+        kg: parsedKg,
+        ratePerKg: parsedRate,
+        total
+      }];
     }
 
-    const total = Number((parsedKg * parsedRate).toFixed(2));
+    const parsedTakenRate = takenRatePerKg !== undefined && takenRatePerKg !== '' && takenRatePerKg !== null
+      ? parseFloat(takenRatePerKg)
+      : null;
+
+    if (parsedKg <= 0 || total <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Valid products with weight and rate are required' });
+    }
+
     let costAmount = null;
     let profit = null;
 
@@ -313,7 +345,8 @@ exports.createVeekhari = async (req, res) => {
       takenRatePerKg: parsedTakenRate,
       costAmount,
       profit,
-      notes: notes || null
+      notes: notes || null,
+      items: cleanedItems
     }, { transaction });
 
     await transaction.commit();
@@ -342,18 +375,37 @@ exports.updateEntry = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Entry not found' });
     }
 
-    const { date, name, kg, ratePerKg, takenRatePerKg, notes } = req.body;
+    const { date, name, kg, ratePerKg, takenRatePerKg, notes, items } = req.body;
 
-    const parsedKg = parseFloat(kg) || parseFloat(entry.kg);
-    const parsedRate = parseFloat(ratePerKg) || parseFloat(entry.ratePerKg);
-    const total = Number((parsedKg * parsedRate).toFixed(2));
+    let parsedKg = parseFloat(kg) || parseFloat(entry.kg);
+    let parsedRate = parseFloat(ratePerKg) || parseFloat(entry.ratePerKg);
+    let total = Number((parsedKg * parsedRate).toFixed(2));
+    let cleanedItems = entry.items;
+
+    if (entry.entryType === 'veekhari' && Array.isArray(items) && items.length > 0) {
+      cleanedItems = items.map(it => {
+        const itKg = parseFloat(it.kg) || 0;
+        const itRate = parseFloat(it.ratePerKg) || 0;
+        const itTotal = Number((itKg * itRate).toFixed(2));
+        return {
+          productName: (it.productName || 'Pital Material').trim(),
+          kg: Number(itKg.toFixed(3)),
+          ratePerKg: Number(itRate.toFixed(2)),
+          total: itTotal
+        };
+      });
+
+      parsedKg = Number(cleanedItems.reduce((acc, it) => acc + it.kg, 0).toFixed(3));
+      total = Number(cleanedItems.reduce((acc, it) => acc + it.total, 0).toFixed(2));
+      parsedRate = parsedKg > 0 ? Number((total / parsedKg).toFixed(2)) : 0;
+    }
 
     let parsedTakenRate = entry.takenRatePerKg;
     let costAmount = entry.costAmount;
     let profit = entry.profit;
 
     if (entry.entryType === 'veekhari') {
-      if (takenRatePerKg !== undefined && takenRatePerKg !== '') {
+      if (takenRatePerKg !== undefined && takenRatePerKg !== '' && takenRatePerKg !== null) {
         parsedTakenRate = parseFloat(takenRatePerKg);
         costAmount = Number((parsedKg * parsedTakenRate).toFixed(2));
         profit = Number((total - costAmount).toFixed(2));
@@ -380,7 +432,8 @@ exports.updateEntry = async (req, res) => {
       takenRatePerKg: parsedTakenRate,
       costAmount,
       profit,
-      notes: notes !== undefined ? notes : entry.notes
+      notes: notes !== undefined ? notes : entry.notes,
+      items: cleanedItems
     }, { transaction });
 
     await transaction.commit();

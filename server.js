@@ -109,6 +109,16 @@ const startServer = async () => {
       }
     } catch (_) {}
 
+    // Auto-migrate pital_entries schema if table exists without items
+    try {
+      const [colRows] = await sequelize.query("SHOW COLUMNS FROM `pital_entries` LIKE 'items'");
+      if (colRows.length === 0) {
+        console.log('🔄 Adding items column to pital_entries table...');
+        await sequelize.query("ALTER TABLE `pital_entries` ADD COLUMN `items` JSON NULL AFTER `notes`");
+        console.log('✅ Added items column to pital_entries');
+      }
+    } catch (_) {}
+
     await sequelize.sync();
     console.log('✅ Database tables synchronized');
 
