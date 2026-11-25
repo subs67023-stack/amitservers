@@ -99,6 +99,16 @@ const startServer = async () => {
       // Table doesn't exist yet, sync will create it with all columns
     }
 
+    // Auto-migrate salaries schema if table exists without addToBaki
+    try {
+      const [colRows] = await sequelize.query("SHOW COLUMNS FROM `salaries` LIKE 'addToBaki'");
+      if (colRows.length === 0) {
+        console.log('🔄 Adding addToBaki column to salaries table...');
+        await sequelize.query("ALTER TABLE `salaries` ADD COLUMN `addToBaki` TINYINT(1) NOT NULL DEFAULT 0 AFTER `advance`");
+        console.log('✅ Added addToBaki column to salaries');
+      }
+    } catch (_) {}
+
     await sequelize.sync();
     console.log('✅ Database tables synchronized');
 

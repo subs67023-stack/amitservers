@@ -47,6 +47,12 @@ const Salary = sequelize.define('Salary', {
     defaultValue: 0,
     comment: 'Advance money given to employee'
   },
+  addToBaki: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    comment: 'Whether advance was added to baki instead of deducted'
+  },
   finalPagar: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
